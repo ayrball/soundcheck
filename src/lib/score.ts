@@ -66,7 +66,14 @@ const CANDIDATE_MIN_PROB = 0.01;
 export interface AssessOptions {
   /** Sounds that must stay distinct (the drill's contrast), never accepted as variants. */
   strict?: string[];
+  /**
+   * Accept a word-final stop that was not released (American "ba' with me"). Turn off
+   * when dropping final consonants is the habit being trained.
+   */
+  unreleasedFinals?: boolean;
 }
+
+const STOPS = new Set(["p", "b", "t", "d", "k", "ɡ"]);
 
 export function assess(
   em: Emissions,
@@ -75,6 +82,9 @@ export function assess(
   opts: AssessOptions = {},
 ): Assessment {
   const strict = new Set(opts.strict ?? []);
+  const unreleasedFinals = opts.unreleasedFinals ?? true;
+  const wordEnds = new Set<number>();
+  words.reduce((end, w) => (wordEnds.add(end + w.tokens.length - 1), end + w.tokens.length), 0);
   const idToToken: string[] = [];
   for (const [tok, id] of Object.entries(vocab)) idToToken[id] = tok;
 
@@ -98,6 +108,7 @@ export function assess(
     const target = labels[i];
     const win = windowFor(spans, i, em.T);
     const ok = new Set((ACCEPTABLE_VARIANTS[p.token] ?? []).filter((t) => !strict.has(t)));
+    if (unreleasedFinals && STOPS.has(p.token) && wordEnds.has(i)) ok.add("");
     const alts: { token: string; ll: number }[] = [];
 
     for (const id of topCandidates(em, win, candidateIds, target)) {

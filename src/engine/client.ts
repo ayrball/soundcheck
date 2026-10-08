@@ -82,10 +82,10 @@ class Engine {
     return this.call({ type: "phonemize", id: this.nextId++, text });
   }
 
-  analyze(audio: Float32Array, text: string, opts: AssessOptions = {}): Promise<Analysis> {
+  analyze(audio: Float32Array, input: string | PhonemizedWord[], opts: AssessOptions = {}): Promise<Analysis> {
     this.load();
     const copy = audio.slice();
-    return this.call({ type: "analyze", id: this.nextId++, audio: copy, text, opts }, [copy.buffer]);
+    return this.call({ type: "analyze", id: this.nextId++, audio: copy, input, opts }, [copy.buffer]);
   }
 
   subscribe = (l: () => void) => {

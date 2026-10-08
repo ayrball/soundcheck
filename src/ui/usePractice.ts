@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MicError, Recorder, type Recording } from "../audio/recorder";
 import { engine, type Analysis } from "../engine/client";
+import type { PhonemizedWord } from "../lib/phones";
 import type { AssessOptions } from "../lib/score";
 
 export type Phase =
@@ -14,13 +15,13 @@ export type Phase =
 
 export function usePractice() {
   const recorder = useRef(new Recorder());
-  const job = useRef<{ text: string; opts: AssessOptions } | null>(null);
+  const job = useRef<{ input: string | PhonemizedWord[]; opts: AssessOptions } | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [level, setLevel] = useState(0);
 
   const finish = useCallback(async () => {
     if (!recorder.current.active || !job.current) return;
-    const { text, opts } = job.current;
+    const { input, opts } = job.current;
     setPhase({ kind: "checking" });
     setLevel(0);
     try {
@@ -29,7 +30,7 @@ export function usePractice() {
         setPhase({ kind: "error", message: "We didn't hear anything. Check your microphone and speak a little louder." });
         return;
       }
-      const analysis = await engine.analyze(recording.audio, text, opts);
+      const analysis = await engine.analyze(recording.audio, input, opts);
       setPhase({ kind: "done", analysis, recording });
     } catch (e) {
       setPhase({ kind: "error", message: e instanceof Error ? e.message : String(e) });
@@ -37,8 +38,8 @@ export function usePractice() {
   }, []);
 
   const start = useCallback(
-    async (text: string, opts: AssessOptions = {}, maxSeconds = 6) => {
-      job.current = { text, opts };
+    async (input: string | PhonemizedWord[], opts: AssessOptions = {}, maxSeconds = 6) => {
+      job.current = { input, opts };
       engine.load();
       try {
         await recorder.current.start({ maxSeconds, onLevel: setLevel, onAutoStop: () => void finish() });

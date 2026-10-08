@@ -4,7 +4,14 @@ import type { AssessOptions, Assessment } from "../lib/score";
 export type Request =
   | { type: "load" }
   | { type: "phonemize"; id: number; text: string }
-  | { type: "analyze"; id: number; audio: Float32Array; text: string; opts: AssessOptions };
+  | {
+      type: "analyze";
+      id: number;
+      audio: Float32Array;
+      /** text to phonemize, or the expected words already phonemized */
+      input: string | PhonemizedWord[];
+      opts: AssessOptions;
+    };
 
 export type Response =
   | { type: "progress"; loaded: number; total: number }

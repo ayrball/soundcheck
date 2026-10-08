@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { canSpeak, speak } from "../audio/tts";
-import { CARRIER, carrierPhrase } from "../content/carrier";
+import { CARRIER, carrierPhrase, carrierWords } from "../content/carrier";
 import { focusIndex, type Contrast, type Drill as DrillItem } from "../content/contrasts";
 import { adviceFor, insertionAdvice, nameOf } from "../content/feedback";
 import { engine, type Analysis } from "../engine/client";
+import type { PhonemizedWord } from "../lib/phones";
 import type { PhoneStatus } from "../lib/score";
 import { recordScore, update, useSaved } from "../state/store";
 import { Heard, MicButton, PhoneRow, pct, placeInsertions } from "./components";
@@ -54,20 +55,31 @@ function Speak({ contrast }: { contrast: Contrast }) {
   const [idx, setIdx] = useState(0);
   const drill = order[idx % order.length];
   const [tokens, setTokens] = useState<{ word: string[]; partner: string[] } | null>(null);
+  /** expected phones for what the learner says: the word alone, or inside the phrase */
+  const [expected, setExpected] = useState<PhonemizedWord[] | null>(null);
   const { phase, level, start, stop, reset } = usePractice();
 
   useEffect(() => {
     let live = true;
     setTokens(null);
-    Promise.all([engine.phonemize(drill.word), drill.partner ? engine.phonemize(drill.partner) : Promise.resolve([])]).then(
-      ([w, p]) => live && setTokens({ word: w[0]?.tokens ?? [], partner: p[0]?.tokens ?? [] }),
-    );
+    setExpected(null);
+    const phonemize = (t: string) => engine.phonemize(t);
+    (async () => {
+      const [w, p] = await Promise.all([phonemize(drill.word), drill.partner ? phonemize(drill.partner) : []]);
+      const word: PhonemizedWord = { ...w[0], text: drill.word };
+      const phrase = saved.carrier ? await carrierWords(phonemize, word) : [word];
+      if (!live) return;
+      setTokens({ word: word.tokens, partner: p[0]?.tokens ?? [] });
+      setExpected(phrase);
+    })();
     return () => {
       live = false;
     };
-  }, [drill]);
+  }, [drill, saved.carrier]);
 
   const phrase = saved.carrier ? carrierPhrase(drill.word) : drill.word;
+  const record = () =>
+    expected && start(expected, { strict, unreleasedFinals: !contrast.strictFinals }, saved.carrier ? 7 : 5);
   const strict = useMemo(
     () => [...contrast.sounds, ...(tokens?.partner ?? []).filter((t) => !tokens?.word.includes(t))],
     [contrast, tokens],
@@ -124,7 +136,7 @@ function Speak({ contrast }: { contrast: Contrast }) {
           phrase={phrase}
           onRetry={() => {
             reset();
-            void start(phrase, { strict }, saved.carrier ? 7 : 5);
+            void record();
           }}
           onNext={next}
         />
@@ -134,7 +146,7 @@ function Speak({ contrast }: { contrast: Contrast }) {
             phase={phase}
             level={level}
             idleLabel="Tap, then say it"
-            onStart={() => start(phrase, { strict }, saved.carrier ? 7 : 5)}
+            onStart={() => void record()}
             onStop={stop}
           />
           {phase.kind === "error" && <div className="notice">{phase.message}</div>}
@@ -185,8 +197,10 @@ function DrillResult(props: {
   const a = analysis.result;
   const wi = Math.max(0, a.words.findIndex((w) => w.text?.toLowerCase() === drill.word.toLowerCase()));
   const word = a.words[wi];
-  const fi = word.phoneStart + focusIndex(analysis.words[wi].tokens, drill.focus, contrast.focusAt);
-  const focus = a.phones[fi];
+  const local = focusIndex(analysis.words[wi].tokens, drill.focus, contrast.focusAt);
+  const fi = local >= 0 ? word.phoneStart + local : -1;
+  // If the focus sound can't be located, judge the whole word instead.
+  const focus = fi >= 0 ? a.phones[fi] : { token: drill.focus, score: word.score, heard: null };
 
   const { before, after } = placeInsertions(a);
   const extras: { token: string; prev: string | null }[] = [];
@@ -196,19 +210,17 @@ function DrillResult(props: {
   }
   const extraHurts = extras.length > 0 && contrast.watchFor === "insertion";
 
-  const score = focus ? focus.score * (extraHurts ? 0.5 : 1) : 0;
+  const score = focus.score * (extraHurts ? 0.5 : 1);
   const status: PhoneStatus = score >= 0.7 ? "good" : score >= 0.35 ? "fair" : "poor";
 
   const saved = useRef(false);
   const audio = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
-    if (!saved.current && focus) {
+    if (!saved.current) {
       saved.current = true;
       recordScore(contrast.id, score);
     }
-  }, [contrast.id, focus, score]);
-
-  if (!focus) return null;
+  }, [contrast.id, score]);
   const sound = nameOf(drill.focus);
   const title = extraHurts
     ? "You added an extra vowel"

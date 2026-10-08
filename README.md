@@ -47,7 +47,10 @@ speaking test.
      where it *is* the contrast being drilled.
    - Drill words are said in a carrier phrase, "Say ___ with me." The model is much more
      reliable with speech around the word, and the following *w* keeps final consonants
-     and added vowels audible.
+     and added vowels audible. The phrase is scored against the word's own pronunciation,
+     so "live" stays /lɪv/ even though eSpeak reads the phrase as /laɪv/.
+   - An unreleased final stop ("ba' with me") counts as correct, except in the drills
+     where dropping final consonants is the habit being trained.
 
 ## Accuracy (synthetic test set)
 
@@ -55,7 +58,26 @@ speaking test.
 and against its minimal-pair partner ("swapped", e.g. the *sink* recording scored as
 *think*). Generate recordings first with `python scripts/make-tts.py --carrier`.
 
-ACCURACY_TABLE
+| | Voices used while tuning (Aria, Guy) | Held-out voice (Andrew) |
+|---|---|---|
+| Correct target sound rated **good** | 93.0% | 85.0% |
+| Correct target sound wrongly flagged **poor** | 1.8% | 8.8% |
+| Swapped sound flagged **poor** | 99.1% | 96.8% |
+| Swapped sound *not* rated good | 100% | 98.2% |
+| Feedback names the actual substitute ("sounded like s") | 92.1% | 84.4% |
+| Extra vowel wrongly reported | 0% | 0% |
+
+For comparison, scoring isolated words (no carrier phrase) wrongly flagged 12–15% of correct
+sounds on the tuning voices. Scoring takes about 0.1 s per phrase on a desktop CPU.
+
+Words read by Spanish-, Japanese- and Mandarin-locale voices (a rough stand-in for
+accented speech) trigger the textbook errors: "**e**school", "s**i**p" for *ship*,
+"**b**ery" for *very*, "desk-**u**", Japanese r heard as a tap, "**f**ree" for *three*.
+Extra vowels were found in 11 of 16 consonant-final words from the Japanese voice and
+0 of 48 from the native voices.
+
+Weakest spots on the held-out voice: *th* heard as *f* (θ/f are acoustically close),
+the *cat/bed* vowels (æ/ɛ), and short *i* before a final t.
 
 These are synthetic native voices. They show the scoring separates right from wrong
 sounds, but **real learner recordings are the next validation step** (see Roadmap).
@@ -95,8 +117,8 @@ scripts/eval.ts          accuracy evaluation
 - **Predictable phrases hide errors.** In free practice, a sentence like "I think…" can be
   scored as correct even when said "I sink…": the model has learned common word sequences
   and partly "hears" what it expects. Drills avoid this with the neutral carrier phrase.
-- **Some vowels are weak.** The *full/fool* (ʊ/uː) and *cat/cut* (æ/ʌ) contrasts are less
-  reliable than consonants.
+- **Some contrasts are weaker.** Vowels (*full/fool*, *cat/bed*, *cat/cut*) and *th/f*
+  are less reliable than other consonants; see the accuracy section.
 - **American English only**, compared against one standard pronunciation.
 - **Licensing:** `phonemizer` bundles eSpeak NG, which is GPL-3.0. Check what that means
   for a closed-source commercial release, or swap in a pronunciation dictionary

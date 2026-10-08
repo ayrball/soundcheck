@@ -3,6 +3,7 @@
 
 import { AutoFeatureExtractor, AutoModelForCTC, env } from "@huggingface/transformers";
 import { phonemize } from "phonemizer";
+import type { PhonemizedWord } from "../lib/phones";
 import type { AssessOptions } from "../lib/score";
 import { analyzeLogits, MODEL_DTYPE, MODEL_ID, phonemizeText } from "./model";
 import type { Request, Response } from "./protocol";
@@ -44,9 +45,9 @@ function load(): Promise<Loaded> {
   return loading;
 }
 
-async function analyze(id: number, audio: Float32Array, text: string, opts: AssessOptions) {
+async function analyze(id: number, audio: Float32Array, input: string | PhonemizedWord[], opts: AssessOptions) {
   const { fe, model } = await load();
-  const words = await phonemizeText(phonemize, text);
+  const words = typeof input === "string" ? await phonemizeText(phonemize, input) : input;
   const t0 = performance.now();
   const { logits } = await model(await fe(audio));
   const result = analyzeLogits(logits, words, opts);
@@ -65,7 +66,7 @@ self.onmessage = async (e: MessageEvent<Request>) => {
         post({ type: "phonemized", id: msg.id, words: await phonemizeText(phonemize, msg.text) });
         break;
       case "analyze":
-        await analyze(msg.id, msg.audio, msg.text, msg.opts);
+        await analyze(msg.id, msg.audio, msg.input, msg.opts);
         break;
     }
   } catch (err) {

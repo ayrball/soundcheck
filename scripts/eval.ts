@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { AutoFeatureExtractor, AutoModelForCTC, env } from "@huggingface/transformers";
 import { phonemize } from "phonemizer";
-import { carrierPhrase } from "../src/content/carrier";
+import { carrierWords } from "../src/content/carrier";
 import { CONTRASTS, focusIndex } from "../src/content/contrasts";
 import { analyzeLogits, MODEL_DTYPE, MODEL_ID, phonemizeText } from "../src/engine/model";
 import { THRESHOLDS } from "../src/lib/score";
@@ -14,7 +14,6 @@ import { THRESHOLDS } from "../src/lib/score";
 env.cacheDir = "./.model-cache";
 const carrier = process.argv.includes("--carrier");
 const ROOT = carrier ? "test-audio/tts-carrier" : "test-audio/tts";
-const prompt = (w: string) => (carrier ? carrierPhrase(w) : w);
 const voices = (process.argv.slice(2).find((a) => !a.startsWith("-"))?.split(",") ?? fs.readdirSync(ROOT)).filter((v) => v.startsWith("en-"));
 const verbose = process.argv.includes("-v");
 
@@ -53,12 +52,16 @@ let ms = 0;
 const misses: string[] = [];
 for (const c of CONTRASTS) {
   for (const d of c.drills) {
-    const lone = (await phonemizeText(phonemize, d.word))[0].tokens;
-    const words = await phonemizeText(phonemize, prompt(d.word));
+    const loneWord = (await phonemizeText(phonemize, d.word))[0];
+    const lone = loneWord.tokens;
+    const words = carrier ? await carrierWords((t) => phonemizeText(phonemize, t), loneWord) : [loneWord];
     const wi = words.findIndex((w) => w.text?.toLowerCase() === d.word);
     const fi = words.slice(0, wi).reduce((n, w) => n + w.tokens.length, 0) + focusIndex(lone, d.focus, c.focusAt);
     const partnerTokens = d.partner ? (await phonemizeText(phonemize, d.partner))[0].tokens : null;
-    const opts = { strict: [...c.sounds, ...(partnerTokens ?? []).filter((t) => !lone.includes(t))] };
+    const opts = {
+      strict: [...c.sounds, ...(partnerTokens ?? []).filter((t) => !lone.includes(t))],
+      unreleasedFinals: !c.strictFinals,
+    };
     for (const v of voices) {
       const t0 = performance.now();
       const a = analyzeLogits(await logitsFor(path.join(ROOT, v, d.word + ".wav")), words, opts);

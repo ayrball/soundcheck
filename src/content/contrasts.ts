@@ -20,6 +20,8 @@ export interface Contrast {
   drills: Drill[];
   /** for drills without a partner: what the common mistake is */
   watchFor?: "insertion" | "deletion";
+  /** final consonants must be fully pronounced (dropping or devoicing them is the error) */
+  strictFinals?: boolean;
   /** which occurrence of the focus sound to highlight (default: first) */
   focusAt?: "first" | "last";
 }
@@ -188,7 +190,7 @@ export const CONTRASTS: Contrast[] = [
     drills: pairs("ɪ", "iː", [
       ["ship", "sheep"],
       ["bit", "beat"],
-      ["live", "leave"],
+      ["fit", "feet"],
       ["fill", "feel"],
       ["sit", "seat"],
       ["chip", "cheap"],
@@ -352,6 +354,7 @@ export const CONTRASTS: Contrast[] = [
   },
   {
     id: "final",
+    strictFinals: true,
     focusAt: "last",
     label: "–C",
     name: "Finishing words: final consonants",
@@ -370,6 +373,7 @@ export const CONTRASTS: Contrast[] = [
   },
   {
     id: "final-voicing",
+    strictFinals: true,
     focusAt: "last",
     label: "d · t",
     name: "Buzzing final sounds: bed vs bet",

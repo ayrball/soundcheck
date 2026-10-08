@@ -48,9 +48,17 @@ describe("assess", () => {
     expect(a.phones.slice(1).every((p) => p.status === "good")).toBe(true);
   });
 
-  it("reports a dropped sound as missing", () => {
-    const a = assess(emissions(["", "b", "", "aɪ", "aɪ", "", ""]), word(["b", "aɪ", "k"]), vocab);
+  it("reports a dropped final consonant when finals are being trained", () => {
+    const em = emissions(["", "b", "", "aɪ", "aɪ", "", ""]);
+    const a = assess(em, word(["b", "aɪ", "k"]), vocab, { unreleasedFinals: false });
     expect(a.phones[2]).toMatchObject({ status: "poor", heard: "" });
+    // Otherwise an unreleased final stop is normal American speech.
+    expect(assess(em, word(["b", "aɪ", "k"]), vocab).phones[2].status).toBe("good");
+  });
+
+  it("reports a dropped sound inside a word as missing", () => {
+    const a = assess(emissions(["", "s", "", "ɪ", "", "k", ""]), word(["s", "t", "ɪ", "k"]), vocab);
+    expect(a.phones[1]).toMatchObject({ status: "poor", heard: "" });
   });
 
   it("accepts normal variants but not the drilled contrast", () => {
